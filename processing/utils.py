@@ -135,84 +135,54 @@ def getLettersBoundingBoxes(binaryWarpedPlateImg):
 
     return letterBoxes
 
+lettersDict = {
+    "A": (0, 35),
+    "B": (35, 85),
+    "C": (85, 135),
+    "D": (135, 182),
+    "E": (182, 231),
+    "F": (231, 278),
+    "G": (278, 327),
+    "H": (327, 380),
+    "I": (380, 423),
+    "J": (423, 467),
+    "K": (467, 518),
+    "L": (518, 565),
+    "M": (565, 614),
+    "N": (614, 663),
+    "O": (663, 710),
+    "P": (710, 757),
+    "R": (757, 807),
+    "S": (807, 855),
+    "T": (855, 902),
+    "U": (902, 951),
+    "V": (951, 998),
+    "W": (998, 1046),
+    "X": (1046, 1094),
+    "Y": (1094, 1141),
+    "Z": (1141, 1191),
+    "0": (1191, 1235),
+    "1": (1235, 1272),
+    "2": (1272, 1317),
+    "3": (1317, 1357),
+    "4": (1357, 1401),
+    "5": (1401, 1441),
+    "6": (1441, 1484),
+    "7": (1484, 1525),
+    "8": (1525, 1567),
+    "9": (1567, 1600)
+}
 
 def getLetterString(topLeft, bottomRight):
 
-    letterBegin = topLeft[0]
-    letterEnd = bottomRight[0]
+    detectedLetterBegin = topLeft[0]
+    detectedLetterEnd = bottomRight[0]
 
-    if (letterBegin >= 0 and letterEnd <= 35):
-        return "A"
-    elif (letterBegin >= 35 and letterEnd <= 85):
-        return "B"
-    elif (letterBegin >= 85 and letterEnd <= 135):
-        return "C"
-    elif (letterBegin >= 135 and letterEnd <= 182):
-        return "D"
-    elif (letterBegin >= 182 and letterEnd <= 231):
-        return "E"
-    elif (letterBegin >= 231 and letterEnd <= 278):
-        return "F"
-    elif (letterBegin >= 278 and letterEnd <= 327):
-        return "G"
-    elif (letterBegin >= 327 and letterEnd <= 380):
-        return "H"
-    elif (letterBegin >= 380 and letterEnd <= 423):
-        return "I"
-    elif (letterBegin >= 423 and letterEnd <= 467):
-        return "J"
-    elif (letterBegin >= 467 and letterEnd <= 518):
-        return "K"
-    elif (letterBegin >= 518 and letterEnd <= 565):
-        return "L"
-    elif (letterBegin >= 565 and letterEnd <= 614):
-        return "M"
-    elif (letterBegin >= 614 and letterEnd <= 663):
-        return "N"
-    elif (letterBegin >= 663 and letterEnd <= 710):
-        return "O"
-    elif (letterBegin >= 710 and letterEnd <= 757):
-        return "P"
-    elif (letterBegin >= 757 and letterEnd <= 807):
-        return "R"
-    elif (letterBegin >= 807 and letterEnd <= 855):
-        return "S"
-    elif (letterBegin >= 855 and letterEnd <= 902):
-        return "T"
-    elif (letterBegin >= 902 and letterEnd <= 951):
-        return "U"
-    elif (letterBegin >= 951 and letterEnd <= 998):
-        return "V"    
-    elif (letterBegin >= 998 and letterEnd <= 1046):
-        return "W" 
-    elif (letterBegin >= 1046 and letterEnd <= 1094):
-        return "X" 
-    elif (letterBegin >= 1094 and letterEnd <= 1141):
-        return "Y" 
-    elif (letterBegin >= 1141 and letterEnd <= 1191):
-        return "Z" 
-    elif (letterBegin >= 1191 and letterEnd <= 1235):
-        return "0" 
-    elif (letterBegin >= 1235 and letterEnd <= 1272):
-        return "1" 
-    elif (letterBegin >= 1272 and letterEnd <= 1317):
-        return "2" 
-    elif (letterBegin >= 1317 and letterEnd <= 1357):
-        return "3" 
-    elif (letterBegin >= 1357 and letterEnd <= 1401):
-        return "4" 
-    elif (letterBegin >= 1401 and letterEnd <= 1441):
-        return "5" 
-    elif (letterBegin >= 1441 and letterEnd <= 1484):
-        return "6" 
-    elif (letterBegin >= 1484 and letterEnd <= 1525):
-        return "7" 
-    elif (letterBegin >= 1525 and letterEnd <= 1567):
-        return "8" 
-    elif (letterBegin >= 1567 and letterEnd <= 1600):
-        return "9" 
-    else:
-        return "0"
+    for letter, [leftBound, rightBound] in lettersDict.items():
+        if(detectedLetterBegin >= leftBound and detectedLetterEnd <= rightBound):
+            return letter
+
+    return "0"
 
 
 def swapFakeO(isTwoLetter, plateIdString):
@@ -276,7 +246,6 @@ def perform_processing(image: np.ndarray) -> str:
 
         # cv2.drawContours(imgOrgCpy, [plateContour], 0, (0, 255, 0), 2)
         # cv2.imshow("whole plate contour", imgOrgCpy)
-  
 
         #cut plate ROI
         ROIoffset = 15
@@ -336,10 +305,8 @@ def perform_processing(image: np.ndarray) -> str:
         #check type of plate
         isTwoLetter = checkIfTwoLetter(letterBoxes)
 
-                
         allLettersImg = cv2.imread('processing/lettersPlate.png', 0)
         ret, allLettersImg = cv2.threshold(allLettersImg, 127, 255,0)
-
 
         warpedPlateBlurred = cv2.GaussianBlur(warpedPlate, (3,3), 0)
 
@@ -377,7 +344,9 @@ def perform_processing(image: np.ndarray) -> str:
 
     end = time.time()
     # print("processing time: ", end-start)
-    # print(plateId)
+    print(plateId)
+
+
     # key = ord(" ")
     # while key != ord("d"):
     #     key = cv2.waitKey(5)
