@@ -135,7 +135,8 @@ def getLettersBoundingBoxes(binaryWarpedPlateImg):
 
     return letterBoxes
 
-lettersDict = {
+#dictionary with horizontal bounds of every letter on template image
+LETTERS_DICT = {
     "A": (0, 35),
     "B": (35, 85),
     "C": (85, 135),
@@ -178,7 +179,7 @@ def getLetterString(topLeft, bottomRight):
     detectedLetterBegin = topLeft[0]
     detectedLetterEnd = bottomRight[0]
 
-    for letter, [leftBound, rightBound] in lettersDict.items():
+    for letter, [leftBound, rightBound] in LETTERS_DICT.items():
         if(detectedLetterBegin >= leftBound and detectedLetterEnd <= rightBound):
             return letter
 
@@ -205,12 +206,22 @@ def swapFakeO(isTwoLetter, plateIdString):
 
     return plateIdString
 
+def swapFake5(isTwoLetter, plateIdString):
+    if isTwoLetter:
+        for index in range(2):
+            if plateIdString[index] == "5":
+                plateIdString = plateIdString[:index] + "S" + plateIdString[index+1:]
+    else:
+        for index in range(3):            
+            if plateIdString[index] == "5":
+                plateIdString = plateIdString[:index] + "S" + plateIdString[index+1:]
 
+    return plateIdString
+    
 
 
 def perform_processing(image: np.ndarray) -> str:
 
-    start = time.time()
     try:
         imgOrg = cv2.resize(image, (0, 0), fx = 0.17, fy = 0.17)
 
@@ -242,15 +253,9 @@ def perform_processing(image: np.ndarray) -> str:
         #get plate contour
         plateContour = getPlateContour(imgHeight, imgWidth, contoursImgCanny, estMinPlateArea)
 
-        imgOrgCpy = imgOrg.copy()
-
-        # cv2.drawContours(imgOrgCpy, [plateContour], 0, (0, 255, 0), 2)
-        # cv2.imshow("whole plate contour", imgOrgCpy)
-
         #cut plate ROI
         ROIoffset = 15
         plateROI = cutPlateROI(imgGray, plateContour, ROIoffset)
-        # cv2.imshow("ROI CUT", plateROI)
 
         adaptiveKerPlate = 11
         subtractPlate = 2
@@ -276,7 +281,6 @@ def perform_processing(image: np.ndarray) -> str:
         plateWhiteAreaCorners = getPlateWhiteAreaCorners(plateROIcorners, plateWhiteAreaHull, plateROI)
 
          # white area dim -> 466x100mm
-
         # WARP THE PLATE
         plateROIheight, plateROIwidth = plateROI.shape
         warpCorners = np.float32([[0,0], [plateROIwidth, 0], [plateROIwidth, int(plateROIwidth/4.66)], [0, int(plateROIwidth/4.66)]])
@@ -294,26 +298,21 @@ def perform_processing(image: np.ndarray) -> str:
         kernelMorphLetters = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2,2))
         cannyWarpedPlate = cv2.morphologyEx(cannyWarpedPlate, cv2.MORPH_DILATE, kernelMorphLetters)
 
-
-        # cv2.imshow("warpedBinary", cannyWarpedPlate)
-
-        lettersContours, hierarchy = cv2.findContours(cannyWarpedPlate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        plateHeight, plateWidth  = cannyWarpedPlate.shape
-
         letterBoxes = getLettersBoundingBoxes(cannyWarpedPlate)
 
-        #check type of plate
+        #check type of plate  -> part of the place discriminator could be 2 or 3 letters long
         isTwoLetter = checkIfTwoLetter(letterBoxes)
 
-        allLettersImg = cv2.imread('processing/lettersPlate.png', 0)
+        allLettersImg = cv2.imread('processing/lettersTemplate.png', 0)
         ret, allLettersImg = cv2.threshold(allLettersImg, 127, 255,0)
 
+        # blur the warped plate
         warpedPlateBlurred = cv2.GaussianBlur(warpedPlate, (3,3), 0)
 
+        #kernel to morph open every letter
         kernelLetter = np.ones((5,5),np.uint8)
 
         plateId = ""
-        # counter = 0
         for box in letterBoxes:
             #cut letter based on bounding box
             x,y,w,h = box
@@ -325,7 +324,6 @@ def perform_processing(image: np.ndarray) -> str:
             ratioCutLetter = w/h
             #40 is height of the template letter
             letter = cv2.resize(letter, (int(ratioCutLetter*40), 40))
-            # cv2.imshow(f"{counter}", letter)
 
             w, h = letter.shape[::-1]
             res = cv2.matchTemplate(allLettersImg,letter,cv2.TM_CCOEFF)
@@ -334,22 +332,13 @@ def perform_processing(image: np.ndarray) -> str:
             bottom_right = (top_left[0] + w, top_left[1] + h)
             plateId += getLetterString(top_left, bottom_right)
 
-            # counter+=1
-
+        # number 0 could not be in the part of the place discriminator, letter O coult not be in the right part of plate
         plateId = swapFakeO(isTwoLetter, plateId)
+        # number 5 could not be in the part of the place discriminator -> minimizing the likelihood of confusion between 5 and S
+        plateId = swapFake5(isTwoLetter, plateId)
 
     except:
-        # print("failed to processImage!!")
         plateId = "PO12345"
 
-    end = time.time()
-    # print("processing time: ", end-start)
-    print(plateId)
-
-
-    # key = ord(" ")
-    # while key != ord("d"):
-    #     key = cv2.waitKey(5)
-    
 
     return plateId
