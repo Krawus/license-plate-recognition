@@ -120,14 +120,14 @@ def checkIfTwoLetter(letterBoxes):
     return isTwoLetter
 
 
-def getLettersBoundingBoxes(binaryWarpedPlateImg):
+def getLettersBoundingBoxes(binaryWarpedPlateImg, procH, procW, procW2):
     lettersContours, hierarchy = cv2.findContours(binaryWarpedPlateImg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     plateHeight, plateWidth  = binaryWarpedPlateImg.shape
     letterBoxes = []
         
     for cnt in lettersContours:
         x,y,w,h = cv2.boundingRect(cnt)
-        if (h >= 0.69*plateHeight) and (w <= 0.3*plateWidth) and (w >= 0.05*plateWidth):
+        if (h >= procH*plateHeight) and (w <= procW*plateWidth) and (w >= procW2*plateWidth):
             letterBoxes.append([x,y,w,h])
 
     #sort letter boxes from left to right
@@ -222,41 +222,46 @@ def swapFake5(isTwoLetter, plateIdString):
 
 def perform_processing(image: np.ndarray) -> str:
 
+    plateId = ""
+    imgOrg = cv2.resize(image, (0, 0), fx = 0.17, fy = 0.17)
+
+    #convert img to gray
+    imgGray = cv2.cvtColor(imgOrg, cv2.COLOR_BGR2GRAY)
+
+    cannyValLow = 23
+    cannyValHigh = 255
+    gaussKernel = 7
+    gaussParam = 1
+    kernelDilSize = 2
+
+    #gauss blur the image
+    imgBlurred = cv2.GaussianBlur(imgGray, (gaussKernel,gaussKernel), gaussParam)
+    imgCanny = cv2.Canny(imgBlurred, cannyValLow, cannyValHigh)
+
+    #dilate image - to close contours
+    kernelDil = np.ones((kernelDilSize,kernelDilSize),np.uint8)
+    dilationImgCanny = cv2.dilate(imgCanny, kernelDil, iterations=1)
+
+    #get the height and width of processed image to calculate area of contours to count as plate
+    imgHeight, imgWidth = imgGray.shape
+
+    #white area of plate -> 466x100mm -> ratio ~4.66
+    estMinPlateArea = calculateEstimatedPlateArea(imgWidth)
+
+    #big try except to be sure that code always works - even if any of the safety features don't work
     try:
-        imgOrg = cv2.resize(image, (0, 0), fx = 0.17, fy = 0.17)
-
-        #convert img to gray
-        imgGray = cv2.cvtColor(imgOrg, cv2.COLOR_BGR2GRAY)
-
-        cannyValLow = 23
-        cannyValHigh = 255
-        gaussKernel = 7
-        gaussParam = 1
-        kernelDilSize = 2
-
-        #gauss blur the image
-        imgBlurred = cv2.GaussianBlur(imgGray, (gaussKernel,gaussKernel), gaussParam)
-        imgCanny = cv2.Canny(imgBlurred, cannyValLow, cannyValHigh)
-
-        #dilate image - to close contours
-        kernelDil = np.ones((kernelDilSize,kernelDilSize),np.uint8)
-        dilationImgCanny = cv2.dilate(imgCanny, kernelDil, iterations=1)
-
-        #get the height and width of processed image to calculate area of contours to count as plate
-        imgHeight, imgWidth = imgGray.shape
-
-        #white area of plate -> 466x100mm -> ratio ~4.66
-        estMinPlateArea = calculateEstimatedPlateArea(imgWidth)
         #create contours of img
         contoursImgCanny, hierarchy = cv2.findContours(dilationImgCanny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         #get plate contour
         plateContour = getPlateContour(imgHeight, imgWidth, contoursImgCanny, estMinPlateArea)
-
         #cut plate ROI
         ROIoffset = 15
-        plateROI = cutPlateROI(imgGray, plateContour, ROIoffset)
-
+        try:
+            plateROI = cutPlateROI(imgGray, plateContour, ROIoffset)
+        except:
+            return "PO77777"
+        
         adaptiveKerPlate = 11
         subtractPlate = 2
         gaussKernelPlate = 5
@@ -280,7 +285,7 @@ def perform_processing(image: np.ndarray) -> str:
         plateROIcorners = getImgCorners(plateROI)
         plateWhiteAreaCorners = getPlateWhiteAreaCorners(plateROIcorners, plateWhiteAreaHull, plateROI)
 
-         # white area dim -> 466x100mm
+            # white area dim -> 466x100mm
         # WARP THE PLATE
         plateROIheight, plateROIwidth = plateROI.shape
         warpCorners = np.float32([[0,0], [plateROIwidth, 0], [plateROIwidth, int(plateROIwidth/4.66)], [0, int(plateROIwidth/4.66)]])
@@ -298,7 +303,15 @@ def perform_processing(image: np.ndarray) -> str:
         kernelMorphLetters = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(2,2))
         cannyWarpedPlate = cv2.morphologyEx(cannyWarpedPlate, cv2.MORPH_DILATE, kernelMorphLetters)
 
-        letterBoxes = getLettersBoundingBoxes(cannyWarpedPlate)
+
+        letterBoxes = getLettersBoundingBoxes(cannyWarpedPlate, 0.69, 0.3, 0.05)
+        if (len(letterBoxes) < 1):
+            # alternative letter detection if letters not found
+            letterBoxes = getLettersBoundingBoxes(cannyWarpedPlate, 0.6, 0.3, 0.05)
+
+        # if letters still not found - end program -> return default val
+        if (len(letterBoxes) < 1):
+            return "PO77777"
 
         #check type of plate  -> part of the place discriminator could be 2 or 3 letters long
         isTwoLetter = checkIfTwoLetter(letterBoxes)
@@ -312,7 +325,6 @@ def perform_processing(image: np.ndarray) -> str:
         #kernel to morph open every letter
         kernelLetter = np.ones((5,5),np.uint8)
 
-        plateId = ""
         for box in letterBoxes:
             #cut letter based on bounding box
             x,y,w,h = box
@@ -338,7 +350,7 @@ def perform_processing(image: np.ndarray) -> str:
         plateId = swapFake5(isTwoLetter, plateId)
 
     except:
-        plateId = "PO12345"
-
+        #default plate
+        plateId = "PO77777"
 
     return plateId

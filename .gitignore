@@ -1,3 +1,5 @@
 *venv
 heicimages
 train
+data-test
+*.txt
